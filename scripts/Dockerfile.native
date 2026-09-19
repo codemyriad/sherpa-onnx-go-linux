@@ -1,0 +1,10 @@
+# Build natively on each target (or use buildx emulation). Bookworm limits glibc
+# requirements to the base used by Cassini's runtime images.
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake curl ca-certificates unzip git \
+    && rm -rf /var/lib/apt/lists/*
+COPY scripts/build-native.sh /build-native.sh
+RUN /build-native.sh cpu /out /work
+FROM scratch AS export
+COPY --from=build /out/ /
