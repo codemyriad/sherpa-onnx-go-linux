@@ -1,5 +1,23 @@
 # Cassini release maintenance
 
+`v1.13.7-cassini.6` rebuilds the amd64/arm64 C API from
+[`7e87f9b23838daceb88d96422777851c41c80f99`](https://github.com/codemyriad/sherpa-onnx/commit/7e87f9b23838daceb88d96422777851c41c80f99),
+retained by the `v1.13.7-cassini-nemotron-v2` source tag. This backports the
+reviewed Nemotron final-chunk masking fix, strict model metadata validation
+and cache hardening. It requires ONNX interface version 2 (`num_frames` input)
+and reports `.nemotron-diarization-v2`. Use the current fp32/int8 Nemotron
+exports in the [distribution manifest](https://dist.gocassini.com/manifest.json).
+Version-1 exports need `.5`. The stock Go/C API shim is unchanged:
+set `Segmentation.Pyannote.Model` to the Nemotron model.
+
+Only the amd64/arm64 C API libraries change from `.5`; ONNX Runtime, C++
+wrappers, Go declarations, C header and arm32 binaries are unchanged.
+`scripts/build-native.sh` pins the `.6` source.
+The Parakeet frontend stays intact. Release checks cover stock Go diarization
+with both model precisions, repeated calls and recording/chunk boundaries,
+plus the synthetic Parakeet ASR regression on both architectures (arm64
+under emulation). CUDA execution is not covered by these CPU packages.
+
 `v1.13.7-cassini.5` rebuilds the amd64/arm64 C API library from
 codemyriad/sherpa-onnx commit `5c717ea2b33a724e36602ff5bcd88a72d4db48c6`
 (`v1.13.7-cassini`): the `.4` source plus NVIDIA Nemotron-3-Diarization
@@ -22,8 +40,7 @@ should pair this module with `github.com/k2-fsa/sherpa-onnx-go v1.13.7`.
 The `.4` native source was codemyriad/sherpa-onnx commit
 `832bfe50d1e45929e47c9d6e7a65e8a00a855820` (v1.13.7 plus the gated Parakeet v3
 frontend), native version `1.13.7+cassini-parakeet-v3-reference-v1`.
-`scripts/build-native.sh` now pins the `.5` source. The build helper verifies
-its archive checksum and uses the release's pinned ONNX Runtime assets. The
+The build helper verifies its archive checksum and uses the release's pinned ONNX Runtime assets. The
 binaries in .4 are unchanged from .3; the recipe documents how to rebuild that
 source and is not a claim of byte-for-byte reproducibility.
 
