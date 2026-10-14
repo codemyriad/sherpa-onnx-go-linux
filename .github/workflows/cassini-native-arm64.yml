@@ -12,6 +12,10 @@ on:
       - scripts/build-native.sh
       - scripts/cassini-probe/**
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
 
@@ -75,7 +79,7 @@ jobs:
         run: |
           cp "$OUT/libsherpa-onnx-c-api.so" lib/aarch64-unknown-linux-gnu/
           cd scripts/cassini-probe
-          go build -o "$OUT/cassini-probe" .
+          go build -buildvcs=false -o "$OUT/cassini-probe" .
           "$OUT/cassini-probe" "$MODELS/en.wav" "$MODELS/v3-int8" "$MODELS/ultra-int8" 2>&1 | tee "$OUT/probe.log"
           grep -qx PASS "$OUT/probe.log"
 
