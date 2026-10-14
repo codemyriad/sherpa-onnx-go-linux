@@ -1,5 +1,23 @@
 # Cassini release maintenance
 
+`v1.13.7-cassini.8` is `.7` with only the arm64 C API library replaced by a
+native arm64 build; every other library, the Go source and the header are
+byte-identical to `.7` (the release adds only the workflow and probe below). The source, native version and behavior are those of
+`.7` (codemyriad/sherpa-onnx `0c2ee3f3`). The library was built by
+`.github/workflows/cassini-native-arm64.yml` on a GitHub `ubuntu-24.04-arm`
+runner, inside `golang:1.24-bookworm` (Bookworm, as `scripts/Dockerfile.native`),
+with the unchanged `scripts/build-native.sh`. Two runs produced the identical
+library (`450f512f…`). The same job checks its NEEDED libraries, RUNPATH, highest
+glibc symbol (`GLIBC_2.34`), runtime version and that ONNX Runtime matches the
+pinned archive, then builds `scripts/cassini-probe` against it through the
+stock Go wrapper and decodes the public English sample at normal level and
+multiplied by `0.001` with Parakeet v3 int8 and the tpmaerk Parakeet Ultra int8
+export with its original metadata, on the arm64 runner. All four transcripts
+are the full sentence. Run the workflow from the Actions tab
+(`workflow_dispatch`) to rebuild; it uploads the library, build info, readelf
+output and probe log as the `cassini-native-arm64` artifact. Use this in
+preference to `.7`, whose arm64 library was cross-compiled.
+
 `v1.13.7-cassini.7` rebuilds the amd64/arm64 C API from
 [`0c2ee3f3f5f16bb06d234a0f98632810296ba0eb`](https://github.com/codemyriad/sherpa-onnx/commit/0c2ee3f3f5f16bb06d234a0f98632810296ba0eb),
 retained by the `v1.13.7-cassini-parakeet-ultra-v1` source tag. It backports
