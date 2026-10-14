@@ -1,0 +1,92 @@
+# Build the Cassini arm64 C API library natively on an arm64 runner with the
+# same scripts/build-native.sh and Bookworm base as scripts/Dockerfile.native,
+# check its linkage, then probe it through the stock Go wrapper on the runner.
+name: Cassini native arm64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v1.13.7-cassini]
+    paths:
+      - .github/workflows/cassini-native-arm64.yml
+      - scripts/build-native.sh
+      - scripts/cassini-probe/**
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    # Bookworm (glibc 2.36, GCC 12), as scripts/Dockerfile.native; Go for the probe.
+    container: golang:1.24-bookworm
+    timeout-minutes: 90
+    env:
+      OUT: /tmp/cassini-native/out
+      WORK: /tmp/cassini-native/work
+      MODELS: /tmp/cassini-models
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential cmake curl ca-certificates unzip git binutils
+
+      - name: Build libsherpa-onnx-c-api.so
+        run: |
+          test "$(uname -m)" = aarch64
+          CASSINI_NATIVE_BUILD_JOBS=$(nproc) scripts/build-native.sh cpu "$OUT" "$WORK"
+          cat "$OUT/cassini-native-buildinfo.txt"
+          sha256sum "$OUT"/*.so
+
+      - name: Check linkage
+        run: |
+          lib=$OUT/libsherpa-onnx-c-api.so
+          readelf -d "$lib" | tee "$OUT/readelf.txt"
+          needed=$(readelf -d "$lib" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort | tr '\n' ' ')
+          test "$needed" = "libc.so.6 libgcc_s.so.1 libm.so.6 libonnxruntime.so libstdc++.so.6 "
+          readelf -d "$lib" | grep RUNPATH | grep -F '[$ORIGIN:'
+          glibc=$(objdump -T "$lib" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
+          echo "highest glibc symbol: $glibc"
+          test "$(printf '%s\nGLIBC_2.34\n' "$glibc" | sort -V | tail -1)" = GLIBC_2.34
+          grep -aq '1.13.7+cassini-parakeet-v3-reference-v1.nemotron-diarization-v2.parakeet-ultra-v1' "$lib"
+          # ONNX Runtime comes from the pinned archive and must be unchanged.
+          cmp "$OUT/libonnxruntime.so" lib/aarch64-unknown-linux-gnu/libonnxruntime.so
+
+      - name: Fetch pinned models and sample
+        run: |
+          fetch() { curl --fail --location --retry 3 -o "$2" "$1"; echo "$3  $2" | sha256sum -c -; }
+          v3=https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78
+          ultra=https://huggingface.co/tpmaerk/parakeet-ultra-sherpa-onnx-int8/resolve/b86784a3a5356cbd126f710b61cd90c5fe5898f1
+          mkdir -p "$MODELS/v3-int8" "$MODELS/ultra-int8"
+          fetch $v3/test_wavs/en.wav "$MODELS/en.wav" 148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6
+          fetch $v3/encoder.int8.onnx "$MODELS/v3-int8/encoder.int8.onnx" acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247
+          fetch $v3/decoder.int8.onnx "$MODELS/v3-int8/decoder.int8.onnx" 179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e
+          fetch $v3/joiner.int8.onnx "$MODELS/v3-int8/joiner.int8.onnx" 3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3
+          fetch $v3/tokens.txt "$MODELS/v3-int8/tokens.txt" d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d
+          # Original metadata: url "https://huggingface.co/moondream/parakeet-ultra (parakeet-tdt-0.6b-v3 architecture)".
+          fetch $ultra/encoder.int8.onnx "$MODELS/ultra-int8/encoder.int8.onnx" f4d06712d32431b1718eceba2153c314ac4425e8fe708a3534f5e56c5ad53697
+          fetch $ultra/decoder.int8.onnx "$MODELS/ultra-int8/decoder.int8.onnx" 94373c6405c8149d1c9d1e9862514e0e3e88dab1c7de18fac9d5df9c6ba5efdd
+          fetch $ultra/joiner.int8.onnx "$MODELS/ultra-int8/joiner.int8.onnx" 8a71aaccfdba3d451775507a889afd2257d2e754463fd81095a8c8f290f924c2
+          fetch $ultra/tokens.txt "$MODELS/ultra-int8/tokens.txt" d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d
+
+      - name: Probe through the stock Go wrapper
+        run: |
+          cp "$OUT/libsherpa-onnx-c-api.so" lib/aarch64-unknown-linux-gnu/
+          cd scripts/cassini-probe
+          go build -o "$OUT/cassini-probe" .
+          "$OUT/cassini-probe" "$MODELS/en.wav" "$MODELS/v3-int8" "$MODELS/ultra-int8" 2>&1 | tee "$OUT/probe.log"
+          grep -qx PASS "$OUT/probe.log"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cassini-native-arm64
+          path: |
+            /tmp/cassini-native/out/libsherpa-onnx-c-api.so
+            /tmp/cassini-native/out/libonnxruntime.so
+            /tmp/cassini-native/out/cassini-native-buildinfo.txt
+            /tmp/cassini-native/out/cassini-native-inputs.sha256
+            /tmp/cassini-native/out/readelf.txt
+            /tmp/cassini-native/out/probe.log
+          if-no-files-found: error
