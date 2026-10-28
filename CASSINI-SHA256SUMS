@@ -1,0 +1,9 @@
+4b3607aebd1784b26b6f9b20e4bd974c7ab8287043e4d095cb7d2cb40b5e566e  lib/x86_64-unknown-linux-gnu/libonnxruntime.so
+e1cd0054851e939b5af689f1d71ad27341133de40058a72946e769eb8c24326b  lib/x86_64-unknown-linux-gnu/libsherpa-onnx-c-api.so
+4eab5970c878fd414b21bdb9f5bd48c5f104013f5069580d1e72199437a3604d  lib/x86_64-unknown-linux-gnu/libsherpa-onnx-cxx-api.so
+cfc800d4438f15e8d9017521326776ca7117d8783cb847ccccc2fc61ac4d540f  lib/aarch64-unknown-linux-gnu/libonnxruntime.so
+a6ecc613656c1d9df3ad93d410854d64eea25f5f28447de1e496774b7f165cc7  lib/aarch64-unknown-linux-gnu/libsherpa-onnx-c-api.so
+9aac74565682dd59afee5d4ef93788f7ae3f2a369f69a93841000a1db45de216  lib/aarch64-unknown-linux-gnu/libsherpa-onnx-cxx-api.so
+4636872e9b50f985b7ecaa55a6829dee81bdb96f77010b5bc0a4059e51d872dc  lib/arm-unknown-linux-gnueabihf/libonnxruntime.so
+536887cc23a178fd5099904ca188b8d741c2aa0d7fee7ceb883d96a2cbf3a0d3  lib/arm-unknown-linux-gnueabihf/libsherpa-onnx-c-api.so
+38f773554f3eff173e57ca20e4d689ed0a5f9c206e4e3b007361f362ba21bbb9  lib/arm-unknown-linux-gnueabihf/libsherpa-onnx-cxx-api.so
