@@ -59,8 +59,8 @@ jobs:
       - name: Build the C API and C++ API libraries
         run: |
           test "$(uname -m)" = ${{ matrix.machine }}
-          gcc --version | head -1
-          ldd --version | head -1
+          gcc --version | sed -n 1p
+          ldd --version | sed -n 1p
           CASSINI_NATIVE_BUILD_JOBS=$(nproc) scripts/build-native.sh cpu "$OUT" "$WORK"
           cat "$OUT/cassini-native-buildinfo.txt"
           (cd "$OUT" && sha256sum ./*.so | tee SHA256SUMS)
