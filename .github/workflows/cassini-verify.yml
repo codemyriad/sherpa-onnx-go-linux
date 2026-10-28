@@ -1,0 +1,50 @@
+# Verify the committed libraries without rebuilding them: checksums against
+# CASSINI-SHA256SUMS, then scripts/cassini-probe.sh through this module's Go
+# wrapper on native amd64 and arm64 runners. Runs on every Cassini tag.
+name: Cassini verify
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v2.0.1-cassini.*']
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: golang:1.24-bookworm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends curl ca-certificates zstd
+
+      - name: Check committed libraries
+        run: sha256sum -c CASSINI-SHA256SUMS
+
+      - name: Probe through this module's Go wrapper
+        run: scripts/cassini-probe.sh /tmp/cassini-models /tmp/cassini-verify
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cassini-verify-${{ matrix.arch }}
+          path: /tmp/cassini-verify/probe.log
+          if-no-files-found: warn

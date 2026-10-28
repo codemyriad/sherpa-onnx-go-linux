@@ -1,0 +1,115 @@
+# Build the Cassini C API and C++ API libraries for linux amd64 and arm64 on
+# native GitHub runners from the source pinned in scripts/build-native.sh, in
+# Debian Bookworm (glibc 2.36, GCC 12, as scripts/Dockerfile.native). Check
+# their linkage and runtime version, check that ONNX Runtime is the archive
+# upstream v2.0.1 pins (byte-identical to the stock module's), then probe the
+# result through this module's Go wrapper with scripts/cassini-probe.sh.
+name: Cassini native
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v2.0.1-cassini]
+    paths:
+      - .github/workflows/cassini-native.yml
+      - scripts/build-native.sh
+      - scripts/cassini-probe.sh
+      - scripts/cassini-probe/**
+      - sherpa_onnx.go
+      - c-api.h
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            machine: x86_64
+            libdir: x86_64-unknown-linux-gnu
+            ld: ld-linux-x86-64.so.2
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            machine: aarch64
+            libdir: aarch64-unknown-linux-gnu
+            ld: ld-linux-aarch64.so.1
+    runs-on: ${{ matrix.runner }}
+    container: golang:1.24-bookworm
+    timeout-minutes: 120
+    env:
+      OUT: /tmp/cassini-native/out
+      WORK: /tmp/cassini-native/work
+      MODELS: /tmp/cassini-models
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential cmake curl ca-certificates unzip git binutils zstd
+
+      - name: Build the C API and C++ API libraries
+        run: |
+          test "$(uname -m)" = ${{ matrix.machine }}
+          gcc --version | head -1
+          ldd --version | head -1
+          CASSINI_NATIVE_BUILD_JOBS=$(nproc) scripts/build-native.sh cpu "$OUT" "$WORK"
+          cat "$OUT/cassini-native-buildinfo.txt"
+          (cd "$OUT" && sha256sum ./*.so | tee SHA256SUMS)
+
+      - name: Check linkage, version and ONNX Runtime
+        run: |
+          for lib in "$OUT/libsherpa-onnx-c-api.so" "$OUT/libsherpa-onnx-cxx-api.so"; do
+            readelf -d "$lib" | tee -a "$OUT/readelf.txt"
+            # shellcheck disable=SC2016
+            readelf -d "$lib" | grep RUNPATH | grep -F '[$ORIGIN:'
+            glibc=$(objdump -T "$lib" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
+            echo "$(basename "$lib") highest glibc symbol: $glibc" | tee -a "$OUT/readelf.txt"
+            test "$(printf '%s\nGLIBC_2.34\n' "$glibc" | sort -V | tail -1)" = GLIBC_2.34
+          done
+          # Only the C/C++ runtime, ONNX Runtime and (for the C++ API) the C API.
+          needed() { readelf -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort; }
+          system='^(libc\.so\.6|libm\.so\.6|libgcc_s\.so\.1|libstdc\+\+\.so\.6|libpthread\.so\.0|libdl\.so\.2|${{ matrix.ld }})$'
+          if needed "$OUT/libsherpa-onnx-c-api.so" | grep -Ev "$system|^libonnxruntime\.so$"; then
+            echo 'unexpected NEEDED in the C API'; exit 1
+          fi
+          needed "$OUT/libsherpa-onnx-c-api.so" | grep -qx libonnxruntime.so
+          if needed "$OUT/libsherpa-onnx-cxx-api.so" | grep -Ev "$system|^libonnxruntime\.so$|^libsherpa-onnx-c-api\.so$"; then
+            echo 'unexpected NEEDED in the C++ API'; exit 1
+          fi
+          needed "$OUT/libsherpa-onnx-cxx-api.so" | grep -qx libsherpa-onnx-c-api.so
+          grep -aqF '2.0.1+cassini.parakeet-tdt-joiner-v1.nemotron-diarization-v2' "$OUT/libsherpa-onnx-c-api.so"
+          # ONNX Runtime 1.28.2 comes from the archive upstream v2.0.1 pins and
+          # must be byte-identical to the stock module's.
+          cmp "$OUT/libonnxruntime.so" lib/${{ matrix.libdir }}/libonnxruntime.so
+          echo "libonnxruntime.so identical to lib/${{ matrix.libdir }}/libonnxruntime.so"
+
+      - name: Probe through this module's Go wrapper
+        run: |
+          cp "$OUT/libsherpa-onnx-c-api.so" "$OUT/libsherpa-onnx-cxx-api.so" lib/${{ matrix.libdir }}/
+          git config --global --add safe.directory "$PWD"
+          git status --short
+          scripts/cassini-probe.sh "$MODELS" "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cassini-native-${{ matrix.arch }}
+          path: |
+            /tmp/cassini-native/out/libsherpa-onnx-c-api.so
+            /tmp/cassini-native/out/libsherpa-onnx-cxx-api.so
+            /tmp/cassini-native/out/libonnxruntime.so
+            /tmp/cassini-native/out/SHA256SUMS
+            /tmp/cassini-native/out/cassini-native-buildinfo.txt
+            /tmp/cassini-native/out/cassini-native-inputs.sha256
+            /tmp/cassini-native/out/readelf.txt
+            /tmp/cassini-native/out/probe.log
+          if-no-files-found: warn
