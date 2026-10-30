@@ -27,9 +27,10 @@ for tool in cmake curl tar sha256sum; do
   command -v "$tool" >/dev/null || { echo "Missing build prerequisite: $tool" >&2; exit 1; }
 done
 version=2.0.1
-# codemyriad/sherpa-onnx tag v2.0.1-cassini-1 (annotated tag object 82f5f012).
-source_commit=c810dfcf409b2a72a13e9f0ac961ff55473e350d
-source_sha=2812247867348e6f22094fa5dd96097b41bdd33ca0be95d94bafcb0f68c4c12c
+# codemyriad/sherpa-onnx tag v2.0.1-cassini-2 (annotated tag object 82c76bbd): upstream
+# master 935e5ded (v2.0.1 + 16 commits) + #4032 + TDT joiner detection + markers.
+source_commit=deede1786479e265a3116bea2b71aac47113d9fc
+source_sha=44727282e5b206f71a783b2d7d113c973203f81bc65685f56d8c2d446b1b3c62
 runtime_version=2.0.1+cassini.parakeet-tdt-joiner-v1.nemotron-diarization-v2
 fingerprint=$("$here/build-native.sh" --fingerprint)
 preinstalled=OFF
@@ -84,7 +85,7 @@ if [[ -z $ort ]]; then echo 'Pinned ONNX Runtime library missing from build depe
 cp -L "$(dirname "$ort")"/libonnxruntime*."$extension"* "$output/"
 if [[ $backend == cuda ]]; then test -f "$output/libonnxruntime_providers_cuda.so"; fi
 printf '%s\n' "$fingerprint" > "$output/cassini-native-inputs.sha256"
-printf 'sherpa=%s\nruntime_version=%s\ntdt=parakeet-tdt-joiner-v1\ndiarization=nemotron-diarization-v2\nbackend=%s\nsource_tag=v2.0.1-cassini-1\nsource_commit=%s\nsource_sha256=%s\n' \
+printf 'sherpa=%s\nruntime_version=%s\ntdt=parakeet-tdt-joiner-v1\ndiarization=nemotron-diarization-v2\nbackend=%s\nsource_tag=v2.0.1-cassini-2\nsource_commit=%s\nsource_sha256=%s\n' \
   "$version" "$runtime_version" "$backend" "$source_commit" "$source_sha" > "$output/cassini-native-buildinfo.txt"
 
 printf 'onnxruntime_identity=%s\n' "$ort_identity" >> "$output/cassini-native-buildinfo.txt"
