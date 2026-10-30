@@ -7,11 +7,49 @@ so consumers use it through a `replace`:
 
 ```
 require github.com/k2-fsa/sherpa-onnx-go/v2 v2.0.1
-replace github.com/k2-fsa/sherpa-onnx-go-linux/v2 => github.com/codemyriad/sherpa-onnx-go-linux/v2 v2.0.1-cassini.1
+replace github.com/k2-fsa/sherpa-onnx-go-linux/v2 => github.com/codemyriad/sherpa-onnx-go-linux/v2 v2.0.1-cassini.3
 ```
 
 The `v1.13.7-cassini` branch and its tags (`v1.13.7-cassini.1` … `.8`) are
 unchanged and keep serving the v1 module path.
+
+## v2.0.1-cassini.3
+
+There is no `.2` on Linux: the version jumps to `.3` so that all three
+platform modules (macOS and Windows already had a `.2`) carry the same tag for
+the same native source.
+
+**Native source:** codemyriad/sherpa-onnx tag `v2.0.1-cassini-2` (annotated
+tag object `82c76bbde5ec59d542443b971a3d406686fa4546`, commit
+[`deede1786479e265a3116bea2b71aac47113d9fc`](https://github.com/codemyriad/sherpa-onnx/commit/deede1786479e265a3116bea2b71aac47113d9fc),
+codeload sha256 `44727282…`). It carries the same three Cassini patches as
+`v2.0.1-cassini-1`, rebased from the v2.0.1 release onto upstream master
+`935e5ded`, which is v2.0.1 plus 16 commits, among them #4084 and #4130
+(NeMo TDT `modified_beam_search`), #4123 (`--length-reward` parsing) and
+#4136 (CI). A fourth patch caches `cudaGetDeviceProperties` and is compiled
+only into Linux x86_64 CUDA builds, so these CPU libraries do not contain it
+(no `cudaGetDeviceProperties*` symbol). The runtime version string, the Go
+source, `c-api.h` and ONNX Runtime are unchanged, and the libraries export
+the same symbols as `.1`. `libsherpa-onnx-cxx-api.so` is byte-identical to
+`.1` on both architectures.
+
+**Release run.** The amd64 and arm64 C API and C++ API libraries are the
+artifacts of
+[run 41049053980](https://github.com/codemyriad/sherpa-onnx-go-linux/actions/runs/41049053980)
+(commit `7c44597`, both jobs green). The checks and the probe are the same as
+for `.1`:
+
+| Check | amd64 | arm64 |
+|---|---|---|
+| Runtime version | `2.0.1+cassini.parakeet-tdt-joiner-v1.nemotron-diarization-v2` | same |
+| Highest glibc symbol, C API / C++ API | `GLIBC_2.34` / `GLIBC_2.32` | same |
+| ONNX Runtime 1.28.2 = stock v2.0.1 module's | yes | yes |
+| Parakeet v3 int8, gain 1 / 0.001 | 27 / 27 tokens, full sentence | 27 / 27, full sentence |
+| Parakeet Ultra int8, plain URL, gain 1 / 0.001 | 27 / 27 tokens, full sentence | 27 / 27, full sentence |
+| Sortformer, four-speaker sample | 9 turns, 4 speakers, identical to `.1` | 9 turns, 4 speakers (within 10 ms of amd64, as in `.1`) |
+
+On an x86_64 host, the same source gives a byte-identical Ultra int8 meeting
+transcript to `.1` (Cassini `build`, 21 min meeting, 6 threads).
 
 ## v2.0.1-cassini.1
 
